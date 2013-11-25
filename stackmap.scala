@@ -36,7 +36,7 @@ object Main {
 
     val prov = MapSuperTree(genSuperMaps(inFiles))
 
-    transformClasses(inZip, outZip)(prov)(v => v)
+    transformClasses(inZip, outZip, prov, c => c)(v => v)
 
     //transformClasses((new ASMifier, new PrintWriter(System.out)))(inZip, outZip)
   }

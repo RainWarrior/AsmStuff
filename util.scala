@@ -191,17 +191,25 @@ object Util extends ClassProviderInstances with TreeInstances with UnmapperFunct
   def toNewFs(path: Path)(fs: FileSystem) =
     fs.getPath("/", path.getFileSystem.getPath("/").relativize(path).toString)
 
-  def fsClassWrite(fs: FileSystem) = {(t: (Option[Array[Byte]], Path)) =>
+  val cr = """(.*)\.class""".r
+  def fsClassWrite(mapper: ClassT => ClassT, fs: FileSystem) = {(t: (Option[Array[Byte]], Path)) =>
     val (data, path) = t
-    val nPath = toNewFs(path)(fs)
     //println(nPath.toUri)
-    Files.createDirectories(nPath.getParent)
     data match {
       case Some(d) =>
+        val ps = path.getFileSystem.getPath("/").relativize(path).toString
+        val nps = ps match {
+          case cr(c) => mapper(c) + ".class"
+          case nps => nps
+        }
+        val nPath = fs.getPath("/", nps)
+        Files.createDirectories(nPath.getParent)
         val os = Files.newOutputStream(nPath, SOO.CREATE, SOO.TRUNCATE_EXISTING, SOO.WRITE)
         os.write(d)
         os.close()
       case None => 
+        val nPath = toNewFs(path)(fs)
+        Files.createDirectories(nPath.getParent)
         Files.copy(path, nPath, SCO.REPLACE_EXISTING)
     }
   }
@@ -224,10 +232,10 @@ object Util extends ClassProviderInstances with TreeInstances with UnmapperFunct
 
   val classFilter = Kleisli[Option, Path, Path](p => if(p.toString.endsWith(".class")) Some(p) else None)
 
-  def transformClasses(inFs: FileSystem, outFs: FileSystem)(tree: SuperTree)(visitor: ClassVisitor => ClassVisitor): Unit = {
+  def transformClasses(inFs: FileSystem, outFs: FileSystem, tree: SuperTree, mapper: ClassT => ClassT)(visitor: ClassVisitor => ClassVisitor): Unit = {
     val ls = LensFamily.firstLensFamily[Path, Option[Array[Byte]], Path]
     inFs.toList.fpair map 
-      (ls =>= (classFilter map (readClass >>> writeFixed(tree)(visitor))).run) >>> fsClassWrite(outFs)
+      (ls =>= (classFilter map (readClass >>> writeFixed(tree)(visitor))).run) >>> fsClassWrite(mapper, outFs)
   }
 
   val toSuperMaps = (n: ClassNode) => (

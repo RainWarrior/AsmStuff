@@ -195,7 +195,7 @@ object TreeObfuscator {
       for((i, o) <- forwConverts) {
         val iz = openZip(i)
         val oz = openZip(o, true)
-        transformClasses(iz, oz)(toTree)(forwMapper)
+        transformClasses(iz, oz, toTree, forwMapper.map)(forwMapper)
         iz.close()
         oz.close()
       }
@@ -205,7 +205,7 @@ object TreeObfuscator {
       for((i, o) <- backConverts) {
         val iz = openZip(i)
         val oz = openZip(o, true)
-        transformClasses(iz, oz)(fromTree)(backMapper)
+        transformClasses(iz, oz, fromTree, backMapper.map)(backMapper)
         iz.close()
         oz.close()
       }
