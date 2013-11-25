@@ -48,8 +48,6 @@ trait Unmapper extends Remapper {
 trait MethodPropagatingUnmapper extends Unmapper {
   val tree: MethodTree
 
-  lazy val destTree = tree translate this
-
   abstract override def addMethod(pair: (MethodU, MethodName)): Unit = {
     super.addMethod(pair)
     val (mU, newMS) = pair
@@ -108,13 +106,18 @@ trait SimpleUnmapper extends Unmapper {
       mappedClasses += pair
   }
 
-  def toSrg: Seq[String] = {
+  def toSrg: Vector[String] = {
     implicit val fieldOrdering = Ordering.by((_: FieldU).toString)
     implicit val methodOrdering = Ordering.by((_: MethodU).toString)
 
-    (for(t <- mappedClasses.toSeq.sorted; (k, v) = t) yield s"CL: $k $v") ++
-    (for(t <- mappedFields.toSeq.sorted; (k, v) = t) yield s"FD: $k ${k translate this}") ++
-    (for(t <- mappedMethods.toSeq.sorted; (k, v) = t) yield s"MD: $k ${k translate this}")
+    (for(t <- mappedClasses.toVector.sorted; (k, v) = t) yield s"CL: $k $v") ++
+    (for(t <- mappedFields.toVector.sorted; (k, v) = t) yield s"FD: $k ${k translate this}") ++
+    (for(t <- mappedMethods.toVector.sorted; (k, v) = t) yield s"MD: $k ${k translate this}")
   }
 }
 
+trait UnmapperFunctions {
+  def MethodPropagatingUnmapper(t: MethodTree) = new SimpleUnmapper with MethodPropagatingUnmapper {
+    val tree = t
+  }
+}

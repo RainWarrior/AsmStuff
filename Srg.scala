@@ -49,7 +49,11 @@ object Srg {
   val Str4 = spaceR(4)
   val Pkg = """(.*)/([^/]*)""".r
 
-  def fromPath(p: Path, um: Unmapper) = load(Files.readAllLines(p, Charset.defaultCharset).toList, um)
+  def fromPath(p: Path, um: Unmapper) =
+    load(Files.readAllLines(p, Charset.defaultCharset).to[Vector], um)
+
+  def fromPathReverse(p: Path, um: Unmapper) =
+    load(Files.readAllLines(p, Charset.defaultCharset).to[Vector] map revLine, um)
 
   def load[F[_]: Functor](lines: F[String], um: Unmapper): Unit = {
     for(l <- lines) yield l match {
@@ -72,5 +76,14 @@ object Srg {
       case _ => throw new IllegalArgumentException(s"""Wrong line in SRG file: "$l" """)
     }
   }
+
+  def revLine(line: String) = line match {
+      case Line(tp, Str2(a, b), comment) =>
+        s"$tp: $b $a ${Option(comment).orZero}"
+      case Line(tp, Str4(a1, a2, b1, b2), comment) =>
+        s"$tp: $b1 $b2 $a1 $a2 ${Option(comment).orZero}"
+  }
+
+  def reverse[F[_]: Functor](lines: F[String]): F[String] = lines map revLine
 }
 

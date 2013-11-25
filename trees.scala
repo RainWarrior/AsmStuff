@@ -99,9 +99,10 @@ trait MethodTree extends SuperTree { self =>
   }
 }
 
-trait MapSuperTree extends SuperTree {
-  def sMap: Map[ClassT, ClassT]
-  def iMap: Map[ClassT, Set[ClassT]]
+class MapSuperTree(
+    val sMap: Map[ClassT, ClassT],
+    val iMap: Map[ClassT, Set[ClassT]]
+  ) extends SuperTree {
 
   override def nodes: Set[ClassT] = iMap.keySet
 
@@ -109,46 +110,73 @@ trait MapSuperTree extends SuperTree {
 
   override def getIfaces(t: ClassT): Set[ClassT] = iMap.get(t).orZero
 }
+object MapSuperTree {
+  def apply(
+      sMap: Map[ClassT, ClassT],
+      iMap: Map[ClassT, Set[ClassT]]): MapSuperTree =
+    new MapSuperTree(sMap, iMap)
 
-trait MapMethodTree extends MapSuperTree with MethodTree { self =>
-  def mMap: Map[ClassT, Set[MethodAcc]]
+  def apply(t: (
+      Map[ClassT, ClassT],
+      Map[ClassT, Set[ClassT]]
+    )): MapSuperTree = apply(t._1, t._2)
+}
+
+class MapMethodTree(
+    sMap: Map[ClassT, ClassT],
+    iMap: Map[ClassT, Set[ClassT]],
+    val mMap: Map[ClassT, Set[MethodAcc]]
+  ) extends MapSuperTree(sMap, iMap) with MethodTree { self =>
 
   override def getMethods(t: ClassT): Set[MethodAcc] = mMap.get(t).orZero
 
-  override def translate(mapper: Remapper): MapMethodTree = new MapMethodTree {
-    val sMap = self.sMap map { case (k, v) => (mapper map k) -> (mapper map v) }
-    val iMap = self.iMap map { case (k, v) => (mapper map k) -> (v map mapper.map) }
-    val mMap = self.mMap map { case (k, v) => (mapper map k) -> (v map (m => m translate mapper)) }
-  }
+  override def translate(mapper: Remapper): MapMethodTree = new MapMethodTree(
+    self.sMap map { case (k, v) => (mapper map k) -> (mapper map v) },
+    self.iMap map { case (k, v) => (mapper map k) -> (v map mapper.map) },
+    self.mMap map { case (k, v) => (mapper map k) -> (v map (m => m translate mapper)) }
+  )
+}
+object MapMethodTree {
+  def apply(
+      sMap: Map[ClassT, ClassT],
+      iMap: Map[ClassT, Set[ClassT]],
+      mMap: Map[ClassT, Set[MethodAcc]]): MapMethodTree =
+    new MapMethodTree(sMap, iMap, mMap)
+
+  def apply(t: (
+      Map[ClassT, ClassT],
+      Map[ClassT, Set[ClassT]],
+      Map[ClassT, Set[MethodAcc]]
+    )): MapMethodTree = apply(t._1, t._2, t._3)
 }
 
 sealed trait TreeInstances0 {
   implicit val mapSuperMonoid = new Monoid[MapSuperTree] {
-    def append(t1: MapSuperTree, t2: => MapSuperTree) = new MapSuperTree {
-      val sMap = (t1.sMap ++ t2.sMap)
-      val iMap = (t1.iMap ++ t2.iMap)
-    }
+    def append(t1: MapSuperTree, t2: => MapSuperTree) = new MapSuperTree(
+      (t1.sMap ++ t2.sMap),
+      (t1.iMap ++ t2.iMap)
+    )
 
-    def zero = new MapSuperTree {
-      val sMap = Map.empty[ClassT, ClassT]
-      val iMap = Map.empty[ClassT, Set[ClassT]]
-    }
+    val zero = new MapSuperTree(
+      Map.empty[ClassT, ClassT],
+      Map.empty[ClassT, Set[ClassT]]
+    )
   }
 }
 
 trait TreeInstances extends TreeInstances0 {
   implicit val mapMethodMonoid = new Monoid[MapMethodTree] {
-    def append(t1: MapMethodTree, t2: => MapMethodTree) = new MapMethodTree {
-      val sMap = (t1.sMap ++ t2.sMap)
-      val iMap = (t1.iMap ++ t2.iMap)
-      val mMap = (t1.mMap ++ t2.mMap)
-    }
+    def append(t1: MapMethodTree, t2: => MapMethodTree) = new MapMethodTree(
+      (t1.sMap ++ t2.sMap),
+      (t1.iMap ++ t2.iMap),
+      (t1.mMap ++ t2.mMap)
+    )
 
-    def zero = new MapMethodTree {
-      val sMap = Map.empty[ClassT, ClassT]
-      val iMap = Map.empty[ClassT, Set[ClassT]]
-      val mMap = Map.empty[ClassT, Set[MethodAcc]]
-    }
+    val zero = new MapMethodTree(
+      Map.empty[ClassT, ClassT],
+      Map.empty[ClassT, Set[ClassT]],
+      Map.empty[ClassT, Set[MethodAcc]]
+    )
   }
 }
 

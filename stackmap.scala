@@ -34,9 +34,7 @@ object Main {
     //val inFiles = inZip.unit[List[Path]]
     val inFiles = inZip.toList
 
-    val prov = new MapSuperTree {
-      val (sMap, iMap) = genSuperMaps(inFiles)
-    }
+    val prov = MapSuperTree(genSuperMaps(inFiles))
 
     transformClasses(inZip, outZip)(prov)(v => v)
 

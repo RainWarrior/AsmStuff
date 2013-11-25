@@ -155,11 +155,11 @@ trait ClassProviderInstances {
   def classProvider[T](f: T => ClassVisitor => ClassVisitor) = new ClassProvider[T] {
     def point(p: T)(v: ClassVisitor): ClassVisitor = f(p)(v)
   }
-  implicit val readerProvider = classProvider[ClassReader] { r => v => { r.accept(v, 0); v } }
+  implicit val readerProvider = classProvider[ClassReader] { r => v => { r.accept(v, ClassReader.EXPAND_FRAMES); v } }
   implicit val nodeProvider = classProvider[ClassNode] { n => v => { n.accept(v); v } }
 }
 
-object Util extends ClassProviderInstances with TreeInstances {
+object Util extends ClassProviderInstances with TreeInstances with UnmapperFunctions {
   //implicit def crToFunction[V <: ClassVisitor](cr: ClassReader) = (v: V) => cr.accept(v, 0) // CV => Unit
   implicit def rvToFunction(r: Remapper) = (v: ClassVisitor) => new RemappingClassAdapter(v, r) // CV => CV
   implicit def wToFunction[P: ClassProvider](cw: ClassWriter) = (p: P) => implicitly[ClassProvider[P]].point(p)(cw)
@@ -250,8 +250,13 @@ object Util extends ClassProviderInstances with TreeInstances {
 
   def genMethodMaps[F[_]: Foldable](files: F[Path]) = foldFiles(toMethodMaps)(files)
 
-  def openZip(pathString: String, create: Boolean = false) = {
-    val path = Paths.get(pathString)
+  def openZip(pathString: String): FileSystem =
+    openZip(Paths.get(pathString))
+
+  def openZip(pathString: String, create: Boolean): FileSystem =
+    openZip(Paths.get(pathString), create)
+
+  def openZip(path: Path, create: Boolean = false): FileSystem = {
     val uri = URI.create("jar:file:" + path.toUri.getPath)
     FileSystems.newFileSystem(uri, Map("create" -> create.toString))
   }
