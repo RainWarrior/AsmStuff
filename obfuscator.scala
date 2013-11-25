@@ -51,11 +51,11 @@ object TreeObfuscator {
 
   val parser = new scopt.OptionParser[Config]("tree_obfuscator") {
     def fileOpt(name: String): OptionDef[Path, Config] =
-      opt[Path](name) valueName "<jar or dir>"
+      opt[Path](name) valueName "<jar>"
     def fileSeqOpt(name: String): OptionDef[Path, Config] =
-      opt[Path](name) valueName "<jar or dir>" unbounded ()
+      opt[Path](name) valueName "<jar>" unbounded ()
     def filePairOpt(name: String): OptionDef[(Path, Path), Config] =
-      opt[(Path, Path)](name) keyValueName ("<input jar or dir>", "<output jar or dir>")
+      opt[(Path, Path)](name) keyValueName ("<input jar>", "<output jar>")
 
     head("tree_obfuscator - java obfuscator with method override checking")
     help("help") text "prints this usage text"
