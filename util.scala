@@ -111,11 +111,11 @@ object Types {
   case class RankedClassMethods(name: ClassT, methods: Set[MethodAcc], rank: Int)
 
   object RankedClassMethods {
-    def apply(name: ClassT, prov: OverrideProvider) =
+    def apply(name: ClassT, tree: MethodTree) =
       new RankedClassMethods(
         name,
-        prov.getMethods(name),
-        prov.getParents(name).filterNot(prov.isProcessed).size
+        tree.getMethods(name),
+        tree.getParents(name).filterNot(tree.nodes).size
       )
   }
 }
@@ -191,18 +191,18 @@ object Util extends ClassProviderInstances {
     node
   }
 
-  def writeFixed[P: ClassProvider](prov: SuperProvider)(f: ClassVisitor => ClassVisitor) = (p: P) => {
-    val cw = new MapWriter(prov, ClassWriter.COMPUTE_FRAMES)
+  def writeFixed[P: ClassProvider](tree: SuperTree)(f: ClassVisitor => ClassVisitor) = (p: P) => {
+    val cw = new TreeWriter(tree, ClassWriter.COMPUTE_FRAMES)
     implicitly[ClassProvider[P]].point(p)(f(cw))
     cw.toByteArray
   }
 
   val classFilter = Kleisli[Option, Path, Path](p => if(p.toString.endsWith(".class")) Some(p) else None)
 
-  def transformClasses(inFs: FileSystem, outFs: FileSystem)(prov: SuperProvider)(visitor: ClassVisitor => ClassVisitor): Unit = {
+  def transformClasses(inFs: FileSystem, outFs: FileSystem)(tree: SuperTree)(visitor: ClassVisitor => ClassVisitor): Unit = {
     val ls = LensFamily.firstLensFamily[Path, Option[Array[Byte]], Path]
     inFs.toList.fpair map 
-      (ls =>= (classFilter map (readClass >>> writeFixed(prov)(visitor))).run) >>> fsClassWrite(outFs)
+      (ls =>= (classFilter map (readClass >>> writeFixed(tree)(visitor))).run) >>> fsClassWrite(outFs)
   }
 
   val toSuperMaps = (n: ClassNode) => (

@@ -38,7 +38,7 @@ object Main {
     //val inFiles = inZip.unit[List[Path]]
     val inFiles = inZip.toList
 
-    val provider = new MapOverrideProvider {
+    val mTree = new MapMethodTree {
       val (sMap, iMap, mMap) = genMethodMaps(inFiles)
     }
 
@@ -46,7 +46,7 @@ object Main {
     //println(provider.fullMMap)
 
     val unmapper = new SimpleUnmapper with MethodPropagatingUnmapper {
-      val prov = provider
+      val tree = mTree
     }
 
     //Srg(Paths.get("test.srg"), unmapper)
