@@ -27,7 +27,7 @@ import Types._
 
 trait SuperTreeWriter extends ClassWriter {
   val tree: SuperTree
-  
+
   override def getCommonSuperClass(t1: ClassT, t2: ClassT): ClassT = {
     @tailrec def rec(t1: ClassT, t2: ClassT): ClassT = {
       if(isAssignableFrom(t1, t2)) t1

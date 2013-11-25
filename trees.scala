@@ -19,6 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package asmstuff
 
+import org.objectweb.asm.commons.Remapper
+
 import scalaz._
 import Scalaz._
 
@@ -32,11 +34,13 @@ trait SuperTree {
   def getParents(t: ClassT): Seq[ClassT] = getSuper(t).toSeq ++ getIfaces(t)
 
   lazy val subMap: Map[ClassT, Set[ClassT]] =
-    (for(c <- nodes; p <- getParents(c)) yield Map(p -> Set(c))).sumr  
+    (for(c <- nodes; p <- getParents(c)) yield Map(p -> Set(c))).sumr
 }
 
-trait MethodTree extends SuperTree {
+trait MethodTree extends SuperTree { self =>
   def getMethods(t: ClassT): Set[MethodAcc]
+
+  def getMethodSet(method: MethodS): Set[MethodS] = fullMMap.get(method).orZero
 
   private[this] def mergeMethods(c: ClassT, ms: Set[MethodAcc], sms: Set[MethodAcc]): Set[MethodAcc] = {
     ms ++ sms.filter(sm => (sm isInheritedBy c) && !sm.static /*&& ms.forall(m => !(m overrides sm))*/)
@@ -86,13 +90,19 @@ trait MethodTree extends SuperTree {
     ds.toMap
   }
 
-  def getMethodSet(method: MethodS): Set[MethodS] = fullMMap.get(method).orZero
+  def translate(mapper: Remapper): MethodTree = new MethodTree {
+    private[this] val rMap = (for(n <- nodes) yield Map((mapper map n) -> n)).sumr
+    lazy val nodes = self.nodes map mapper.map
+    def getSuper(t: ClassT): Option[ClassT] = self getSuper rMap(t) map mapper.map
+    def getIfaces(t: ClassT): Set[ClassT] = self getIfaces rMap(t) map mapper.map
+    def getMethods(t: ClassT): Set[MethodAcc] = self getMethods rMap(t) map (m => m translate mapper)
+  }
 }
 
 trait MapSuperTree extends SuperTree {
   def sMap: Map[ClassT, ClassT]
   def iMap: Map[ClassT, Set[ClassT]]
-  
+
   override def nodes: Set[ClassT] = iMap.keySet
 
   override def getSuper(t: ClassT): Option[ClassT] = sMap.get(t)
@@ -100,9 +110,45 @@ trait MapSuperTree extends SuperTree {
   override def getIfaces(t: ClassT): Set[ClassT] = iMap.get(t).orZero
 }
 
-trait MapMethodTree extends MapSuperTree with MethodTree {
+trait MapMethodTree extends MapSuperTree with MethodTree { self =>
   def mMap: Map[ClassT, Set[MethodAcc]]
 
   override def getMethods(t: ClassT): Set[MethodAcc] = mMap.get(t).orZero
+
+  override def translate(mapper: Remapper): MapMethodTree = new MapMethodTree {
+    val sMap = self.sMap map { case (k, v) => (mapper map k) -> (mapper map v) }
+    val iMap = self.iMap map { case (k, v) => (mapper map k) -> (v map mapper.map) }
+    val mMap = self.mMap map { case (k, v) => (mapper map k) -> (v map (m => m translate mapper)) }
+  }
+}
+
+sealed trait TreeInstances0 {
+  implicit val mapSuperMonoid = new Monoid[MapSuperTree] {
+    def append(t1: MapSuperTree, t2: => MapSuperTree) = new MapSuperTree {
+      val sMap = (t1.sMap ++ t2.sMap)
+      val iMap = (t1.iMap ++ t2.iMap)
+    }
+
+    def zero = new MapSuperTree {
+      val sMap = Map.empty[ClassT, ClassT]
+      val iMap = Map.empty[ClassT, Set[ClassT]]
+    }
+  }
+}
+
+trait TreeInstances extends TreeInstances0 {
+  implicit val mapMethodMonoid = new Monoid[MapMethodTree] {
+    def append(t1: MapMethodTree, t2: => MapMethodTree) = new MapMethodTree {
+      val sMap = (t1.sMap ++ t2.sMap)
+      val iMap = (t1.iMap ++ t2.iMap)
+      val mMap = (t1.mMap ++ t2.mMap)
+    }
+
+    def zero = new MapMethodTree {
+      val sMap = Map.empty[ClassT, ClassT]
+      val iMap = Map.empty[ClassT, Set[ClassT]]
+      val mMap = Map.empty[ClassT, Set[MethodAcc]]
+    }
+  }
 }
 

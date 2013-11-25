@@ -17,17 +17,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
 
-package obfuscator
+package asmstuff
 
 import java.nio.file.Paths
+import java.io.PrintWriter
 
-import asmstuff._
 import Util._
 
 import scalaz._
 import Scalaz._
 
-object Main {
+object Obfuscator {
   def main(args: Array[String]) {
 
     //val inZip = openZip("test.jar")
@@ -49,10 +49,12 @@ object Main {
       val tree = mTree
     }
 
-    //Srg(Paths.get("test.srg"), unmapper)
-    //Srg(Paths.get("1.6.4_mcp.srg"), unmapper)
-    Srg.fromPath(Paths.get("1.7.2_mcp.srg"), unmapper)
+    //Srg.fromPath(Paths.get("test.srg"), unmapper)
+    //Srg.fromPath(Paths.get("1.6.4_mcp.srg"), unmapper)
+    Srg.fromPath(Paths.get("1.7.2_mcpfixed.srg"), unmapper)
 
+    for(f <- Option(new PrintWriter("output.srg"))) { f.write(unmapper.toSrg.mkString("\n")); f.close() }
+    //println(unmapper.toSrg.mkString("\n"))
     //transformClasses(inZip, outZip)(provider)(v => v)
 
     //transformClasses((new ASMifier, new PrintWriter(System.out)))(inZip, outZip)

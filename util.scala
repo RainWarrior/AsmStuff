@@ -93,14 +93,39 @@ object Types {
       ((access & (ACC_PUBLIC | ACC_PROTECTED)) != 0) ||
       ((access & (ACC_PUBLIC | ACC_PROTECTED | ACC_PRIVATE)) == 0 && pkg(owner) == pkg(c)) 
     }
+
+    def translate(mapper: Remapper) = MethodAcc(
+      mapper map owner,
+      mapper mapMethodName (owner, name, desc),
+      mapper mapMethodDesc desc,
+      access
+    )
   }
   case class MethodU(owner: ClassT, name: MethodName, ret: ClassT, args: Seq[ClassT]) {
     def toS = MethodS(owner, name, Type.getMethodDescriptor(Type.getType(ret), args.map(Type.getType): _*))
+
+    def translate(mapper: Remapper) = MethodU(
+      mapper map owner,
+      mapper mapMethodName (owner, name, toS.desc),
+      mapper mapDesc ret ,
+      args map mapper.mapDesc
+    )
+
+    override def toString = s"$owner/$name ${toS.desc}"
   }
 
   type FieldName = String
   type FieldDesc = String
-  case class FieldU(owner: ClassT, name: FieldName, desc: FieldDesc)
+  case class FieldU(owner: ClassT, name: FieldName, desc: FieldDesc) {
+
+    def translate(mapper: Remapper) = FieldU(
+      mapper map owner,
+      mapper mapFieldName (owner, name, desc),
+      if(desc == "") "" else mapper mapDesc desc
+    )
+
+    override def toString = s"$owner/$name"
+  }
 
   def pkg(cls: ClassT) = {
     val sl = cls.lastIndexOf('/')
@@ -114,8 +139,8 @@ object Types {
     def apply(name: ClassT, tree: MethodTree) =
       new RankedClassMethods(
         name,
-        tree.getMethods(name),
-        tree.getParents(name).filterNot(tree.nodes).size
+        tree getMethods name,
+        (tree getParents name filter tree.nodes).size
       )
   }
 }
@@ -134,7 +159,7 @@ trait ClassProviderInstances {
   implicit val nodeProvider = classProvider[ClassNode] { n => v => { n.accept(v); v } }
 }
 
-object Util extends ClassProviderInstances {
+object Util extends ClassProviderInstances with TreeInstances {
   //implicit def crToFunction[V <: ClassVisitor](cr: ClassReader) = (v: V) => cr.accept(v, 0) // CV => Unit
   implicit def rvToFunction(r: Remapper) = (v: ClassVisitor) => new RemappingClassAdapter(v, r) // CV => CV
   implicit def wToFunction[P: ClassProvider](cw: ClassWriter) = (p: P) => implicitly[ClassProvider[P]].point(p)(cw)

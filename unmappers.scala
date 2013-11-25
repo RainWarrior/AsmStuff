@@ -48,6 +48,8 @@ trait Unmapper extends Remapper {
 trait MethodPropagatingUnmapper extends Unmapper {
   val tree: MethodTree
 
+  lazy val destTree = tree translate this
+
   abstract override def addMethod(pair: (MethodU, MethodName)): Unit = {
     super.addMethod(pair)
     val (mU, newMS) = pair
@@ -61,7 +63,7 @@ trait MethodPropagatingUnmapper extends Unmapper {
         //throw new IllegalStateException(s"Mapping conflict: ($mS -> $newMS) and ($m -> ${newM.get})")
         println(s"Mapping conflict: ($mS -> $newMS) and ($m -> ${newM.get})")
       } else {
-        //super.addMethod((m.toU, newMS))
+        super.addMethod((m.toU, newMS))
       }
     }
   }
@@ -86,25 +88,33 @@ trait SimpleUnmapper extends Unmapper {
 
   override def addField(pair: (FieldU, FieldName)) = mappedFields.get(pair._1) match {
     case Some(t) => if(t != pair._2)
-      throw new IllegalArgumentException(s"Already have $t while setting ${pair._1} to ${pair._2}")
+      //throw new IllegalArgumentException(s"Already have $t while setting ${pair._1} to ${pair._2}")
+      println(s"Already have $t while setting ${pair._1} to ${pair._2}")
     case None =>
       mappedFields += pair
   }
   override def addMethod(pair: (MethodU, MethodName)) = mappedMethods.get(pair._1) match {
     case Some(t) => if(t != pair._2)
-      throw new IllegalArgumentException(s"Already have $t while setting ${pair._1} to ${pair._2}")
+      //throw new IllegalArgumentException(s"Already have $t while setting ${pair._1} to ${pair._2}")
+      println(s"Already have $t while setting ${pair._1} to ${pair._2}")
     case None =>
       mappedMethods += pair
   }
   override def addClass(pair: (ClassT, ClassT)) = mappedClasses.get(pair._1) match {
     case Some(t) => if(t != pair._2)
-      throw new IllegalArgumentException(s"Already have $t while setting ${pair._1} to ${pair._2}")
+      //throw new IllegalArgumentException(s"Already have $t while setting ${pair._1} to ${pair._2}")
+      println(s"Already have $t while setting ${pair._1} to ${pair._2}")
     case None =>
       mappedClasses += pair
   }
 
-  def toSrg: Seq[String] = { // Incomplete
-    for(t <- mappedClasses.toSeq.sorted) yield s"CL: ${t._1} ${t._2}"
+  def toSrg: Seq[String] = {
+    implicit val fieldOrdering = Ordering.by((_: FieldU).toString)
+    implicit val methodOrdering = Ordering.by((_: MethodU).toString)
+
+    (for(t <- mappedClasses.toSeq.sorted; (k, v) = t) yield s"CL: $k $v") ++
+    (for(t <- mappedFields.toSeq.sorted; (k, v) = t) yield s"FD: $k ${k translate this}") ++
+    (for(t <- mappedMethods.toSeq.sorted; (k, v) = t) yield s"MD: $k ${k translate this}")
   }
 }
 

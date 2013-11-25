@@ -64,8 +64,8 @@ object Srg {
           Pkg(newCl, newMd), Descriptor(newArgs, newRt)), comment)
           if oldArgs.length == newArgs.length =>
         um.addClass(oldCl -> newCl)
-        (oldArgs, newArgs).zipped.view.foreach(um.addClass)
-        um.addClass(oldRt -> newRt)
+        //(oldArgs, newArgs).zipped.view.foreach(um.addClass)
+        //um.addClass(oldRt -> newRt)
         um.addMethod(MethodU(oldCl, oldMd, oldRt, oldArgs) -> newMd)
         //if(oldCl == "fz") println(s"Method: $oldCl/$oldMd:${oldArgs.mkString} -> $newMd")
         //println(s"Method: $oldCl/$oldMd:${oldArgs.mkString} -> $newMd")
