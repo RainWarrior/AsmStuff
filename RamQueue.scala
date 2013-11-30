@@ -19,17 +19,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package asmstuff
 
-import collection.IterableLike
+import collection.{ Iterable, IterableLike }
 import collection.mutable.{ ArrayBuffer, Builder }
-import collection.generic.{ GenericTraversableTemplate, Growable, Shrinkable }
+import collection.generic.{ GenericOrderedCompanion, GenericOrderedTraversableTemplate, Shrinkable }
+import math.Ordering
 import annotation.tailrec
 
 import scalaz._
 import Scalaz._
 
-class RamQueue[A](implicit ord: math.Ordering[A]) extends IterableLike[A, ArrayBuffer[A]]
-                                                     with GenericTraversableTemplate[A, ArrayBuffer]
-                                                     with Growable[A]
+class RamQueue[A](implicit val ord: Ordering[A]) extends Iterable[A]
+                                                     with IterableLike[A, RamQueue[A]]
+                                                     with Builder[A, RamQueue[A]]
+                                                     with GenericOrderedTraversableTemplate[A, RamQueue]
                                                      with Shrinkable[A] {
   implicit val or = Order.fromScalaOrdering(ord)
   // data(map(a)) == a
@@ -63,9 +65,10 @@ class RamQueue[A](implicit ord: math.Ordering[A]) extends IterableLike[A, ArrayB
     }
   }
 
-  override def seq = data
+  //override def seq = data
   override def iterator = data.iterator
-  override def companion = ArrayBuffer
+  protected[this] override def newBuilder = new RamQueue[A]
+  override def orderedCompanion: GenericOrderedCompanion[RamQueue] = RamQueue
 
   override def +=(a: A): this.type = {
     data += a
@@ -92,5 +95,9 @@ class RamQueue[A](implicit ord: math.Ordering[A]) extends IterableLike[A, ArrayB
     map = Map.empty
   }
 
+  override def result = this
 }
 
+object RamQueue extends GenericOrderedCompanion[RamQueue] {
+  override def newBuilder[A](implicit ord: Ordering[A]) = new RamQueue[A]
+}
