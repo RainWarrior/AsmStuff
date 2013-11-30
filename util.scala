@@ -143,6 +143,22 @@ object Types {
         (tree getParents name filter tree.nodes).size
       )
   }
+
+  import Type._
+
+  def fieldToInternal(s: String): Option[String] = {
+    val t = getType(s)
+    t.getSort match {
+      case OBJECT => Some(t.getInternalName)
+      case ARRAY =>
+        val e = t.getElementType
+        e.getSort match {
+          case OBJECT => Some(e.getInternalName)
+          case _ => None
+        }
+      case _ => None
+    }
+  }
 }
 
 import Types._
