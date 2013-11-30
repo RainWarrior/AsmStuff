@@ -19,17 +19,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package asmstuff
 
-import collection.mutable.ArrayBuffer
+import collection.IterableLike
+import collection.mutable.{ ArrayBuffer, Builder }
+import collection.generic.{ GenericTraversableTemplate, Growable, Shrinkable }
 import annotation.tailrec
 
 import scalaz._
 import Scalaz._
 
-class RamQueue[A](implicit ord: math.Ordering[A]) {
+class RamQueue[A](implicit ord: math.Ordering[A]) extends IterableLike[A, ArrayBuffer[A]]
+                                                     with GenericTraversableTemplate[A, ArrayBuffer]
+                                                     with Growable[A]
+                                                     with Shrinkable[A] {
   implicit val or = Order.fromScalaOrdering(ord)
   // data(map(a)) == a
-  val data = ArrayBuffer.empty[A]
-  var map = Map.empty[A, Int]
+  private[this] val data = ArrayBuffer.empty[A]
+  private[this] var map = Map.empty[A, Int]
 
   private def swap(i: Int, j: Int): Unit = if(i != j) {
     val t = data(i)
@@ -58,14 +63,18 @@ class RamQueue[A](implicit ord: math.Ordering[A]) {
     }
   }
 
-  def +=(a: A): RamQueue[A] = {
+  override def seq = data
+  override def iterator = data.iterator
+  override def companion = ArrayBuffer
+
+  override def +=(a: A): this.type = {
     data += a
     map += a -> (data.length - 1)
     pushUp(data.length - 1)
     this
   }
 
-  def -=(a: A): RamQueue[A] = {
+  override def -=(a: A): this.type = {
     map.get(a) map { pos =>
       swap(pos, data.length - 1)
       data.trimEnd(1)
@@ -78,8 +87,10 @@ class RamQueue[A](implicit ord: math.Ordering[A]) {
     this
   }
 
-  def head: A = data.head
-  def headOption: Option[A] = data.headOption
-  def isEmpty: Boolean = data.isEmpty
+  override def clear(): Unit = {
+    data.clear()
+    map = Map.empty
+  }
+
 }
 
