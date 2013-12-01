@@ -48,4 +48,6 @@ trait SuperTreeWriter extends ClassWriter {
 }
 
 class TreeWriter(val tree: SuperTree, flags: Int) extends ClassWriter(flags) with SuperTreeWriter
-
+object TreeWriter {
+  def apply(tree: SuperTree) = new TreeWriter(tree, ClassWriter.COMPUTE_FRAMES)
+}

@@ -163,23 +163,42 @@ object Types {
 
 import Types._
 
-trait ClassProvider[T] {
-  def point(p: T)(v: ClassVisitor): ClassVisitor
+trait IsClassProvider[P] {
+  def accept(p: P)(v: ClassVisitor): Unit
 }
 
-trait ClassProviderInstances {
-  def classProvider[T](f: T => ClassVisitor => ClassVisitor) = new ClassProvider[T] {
-    def point(p: T)(v: ClassVisitor): ClassVisitor = f(p)(v)
+trait IsClassProviderUtil {
+  def IsClassProvider[P](f: P => ClassVisitor => Unit) = new IsClassProvider[P] {
+    def accept(p: P)(v: ClassVisitor): Unit = f(p)(v)
   }
-  implicit val readerProvider = classProvider[ClassReader] { r => v => { r.accept(v, ClassReader.EXPAND_FRAMES); v } }
-  implicit val nodeProvider = classProvider[ClassNode] { n => v => { n.accept(v); v } }
+
+  implicit val readerProvider = IsClassProvider[ClassReader] { r => v =>
+    r.accept(v, ClassReader.EXPAND_FRAMES)
+  }
+
+  implicit val pathProvider = IsClassProvider[Path] { p => v =>
+    val s = Files.newInputStream(p)
+    new ClassReader(s).accept(v, ClassReader.EXPAND_FRAMES)
+    s.close()
+  }
+
+  implicit val nodeProvider = IsClassProvider[ClassNode] { n => v =>
+    n.accept(v)
+  }
+
+  def runProvider[P, V <: ClassVisitor](p: P, v: V)(implicit P: IsClassProvider[P]): V =
+    runProvider(p, v, v => v)(P)
+
+  def runProvider[P, V <: ClassVisitor](p: P, v: V, f: ClassVisitor => ClassVisitor)(implicit P: IsClassProvider[P]): V = {
+    P.accept(p)(f(v))
+    v
+  }
 }
 
-object Util extends ClassProviderInstances with TreeInstances with UnmapperFunctions {
-  //implicit def crToFunction[V <: ClassVisitor](cr: ClassReader) = (v: V) => cr.accept(v, 0) // CV => Unit
+object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunctions {
+
   implicit def rvToFunction(r: Remapper) = (v: ClassVisitor) => new RemappingClassAdapter(v, r) // CV => CV
-  implicit def wToFunction[P: ClassProvider](cw: ClassWriter) = (p: P) => implicitly[ClassProvider[P]].point(p)(cw)
-  implicit def printerToFunction(t: (Printer, PrintWriter)) = (v: ClassVisitor) => new TraceClassVisitor(v, t._1, t._2)
+  implicit def printerToFunction(t: (Printer, PrintWriter)) = (v: ClassVisitor) => new TraceClassVisitor(v, t._1, t._2) // CV => CV
 
   implicit val fsFoldable: Foldable[({type T[Path] = FileSystem})#T] = new Foldable.FromFoldMap[({type T[Path] = FileSystem})#T] {
     def foldMap[A, B](fa: ({type T[Path] = FileSystem})#T[A])(f: A => B)(implicit F: Monoid[B]) = {
@@ -230,28 +249,15 @@ object Util extends ClassProviderInstances with TreeInstances with UnmapperFunct
     }
   }
 
-  val readClass: Path => ClassReader = { p =>
-    new ClassReader(Files.newInputStream(p))
-  }
-
-  val nodeClass = (cr: ClassReader) => {
-    val node = new ClassNode
-    cr.accept(node, 0)
-    node
-  }
-
-  def writeFixed[P: ClassProvider](tree: SuperTree)(f: ClassVisitor => ClassVisitor) = (p: P) => {
-    val cw = new TreeWriter(tree, ClassWriter.COMPUTE_FRAMES)
-    implicitly[ClassProvider[P]].point(p)(f(cw))
-    cw.toByteArray
-  }
+  def transformClass(p: Path)(tree: SuperTree)(f: ClassVisitor => ClassVisitor): Array[Byte] =
+    runProvider(p, TreeWriter(tree), f).toByteArray
 
   val classFilter = Kleisli[Option, Path, Path](p => if(p.toString.endsWith(".class")) Some(p) else None)
 
   def transformClasses(inFs: FileSystem, outFs: FileSystem, tree: SuperTree, mapper: ClassT => ClassT)(visitor: ClassVisitor => ClassVisitor): Unit = {
     val ls = LensFamily.firstLensFamily[Path, Option[Array[Byte]], Path]
     inFs.toList.fpair map 
-      (ls =>= (classFilter map (readClass >>> writeFixed(tree)(visitor))).run) >>> fsClassWrite(mapper, outFs)
+      (ls =>= classFilter map { p => transformClass(p)(tree)(visitor) }) >>> fsClassWrite(mapper, outFs)
   }
 
   val toSuperMaps = (n: ClassNode) => (
@@ -268,7 +274,7 @@ object Util extends ClassProviderInstances with TreeInstances with UnmapperFunct
   //(Map[String, String @@ Tags.FirstVal], Map[String, Set[String]])
   def foldFiles[F[_]: Foldable, R: Monoid](proc: ClassNode => R)(files: F[Path]): R =
     //(files filter classFilter.isDefinedAt map (readClass >>> nodeClass >>> proc)).fold
-    files foldMap classFilter.map(readClass >>> nodeClass >>> proc).run.andThen(_.orZero)
+    files foldMap classFilter.map(p => proc(runProvider(p, new ClassNode))).run.andThen(_.orZero)
 
   def genSuperMaps[F[_]: Foldable](files: F[Path]) = foldFiles(toSuperMaps)(files)
 
