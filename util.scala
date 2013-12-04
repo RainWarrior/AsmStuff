@@ -200,10 +200,24 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
   implicit def rvToFunction(r: Remapper) = (v: ClassVisitor) => new RemappingClassAdapter(v, r) // CV => CV
   implicit def printerToFunction(t: (Printer, PrintWriter)) = (v: ClassVisitor) => new TraceClassVisitor(v, t._1, t._2) // CV => CV
 
-  implicit val fsFoldable: Foldable[({type T[Path] = FileSystem})#T] = new Foldable.FromFoldMap[({type T[Path] = FileSystem})#T] {
-    def foldMap[A, B](fa: ({type T[Path] = FileSystem})#T[A])(f: A => B)(implicit F: Monoid[B]) = {
+  case class Walk(root: Path)
+
+  implicit val FsUnapply: Unapply[Foldable, Walk] {
+    type M[X] = Walk
+    type A = Path
+  } = new Unapply[Foldable, Walk] {
+    type M[X] = Walk
+    type A = Path
+    def TC = walkFoldable
+    def leibniz = Leibniz.refl
+  }
+
+  type WalkUniv[Path] = Walk
+
+  implicit val walkFoldable: Foldable[WalkUniv] = new Foldable.FromFoldMap[WalkUniv] {
+    def foldMap[A, B](pa: WalkUniv[A])(f: A => B)(implicit F: Monoid[B]) = {
       var res: B = F.zero
-      Files.walkFileTree(fa.getPath("/"), new SimpleFileVisitor[Path] {
+      Files.walkFileTree(pa.root, new SimpleFileVisitor[Path] {
         override def visitFile(path: Path, attrs: BasicFileAttributes) = {
           res = F.append(res, f(path.asInstanceOf[A]))
           FileVisitResult.CONTINUE
@@ -213,37 +227,24 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
     }
   }
 
-  implicit val FsUnapply: Unapply[Foldable, FileSystem] {
-    type M[X] = FileSystem
-    type A = Path
-  } = new Unapply[Foldable, FileSystem] {
-    type M[X] = FileSystem
-    type A = Path
-    def TC = fsFoldable
-    def leibniz = Leibniz.refl
-  }
-
-  def toNewFs(path: Path)(fs: FileSystem) =
-    fs.getPath("/", path.getFileSystem.getPath("/").relativize(path).toString)
-
   val cr = """(.*)\.class""".r
-  def fsClassWrite(mapper: ClassT => ClassT, fs: FileSystem) = {(t: (Option[Array[Byte]], Path)) =>
+  def fsClassWrite(mapper: ClassT => ClassT, in: Path, out: Path) = {(t: (Option[Array[Byte]], Path)) =>
     val (data, path) = t
     //println(nPath.toUri)
     data match {
       case Some(d) =>
-        val ps = path.getFileSystem.getPath("/").relativize(path).toString
+        val ps = (in relativize path).toString
         val nps = ps match {
           case cr(c) => mapper(c) + ".class"
           case nps => nps
         }
-        val nPath = fs.getPath("/", nps)
+        val nPath = out resolve nps
         Files.createDirectories(nPath.getParent)
         val os = Files.newOutputStream(nPath, SOO.CREATE, SOO.TRUNCATE_EXISTING, SOO.WRITE)
         os.write(d)
         os.close()
       case None => 
-        val nPath = toNewFs(path)(fs)
+        val nPath = out resolve (in relativize path)
         Files.createDirectories(nPath.getParent)
         Files.copy(path, nPath, SCO.REPLACE_EXISTING)
     }
@@ -254,10 +255,11 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
 
   val classFilter = Kleisli[Option, Path, Path](p => if(p.toString.endsWith(".class")) Some(p) else None)
 
-  def transformClasses(inFs: FileSystem, outFs: FileSystem, tree: SuperTree, mapper: ClassT => ClassT)(visitor: ClassVisitor => ClassVisitor): Unit = {
+  def transformClasses(inPath: Path, outPath: Path, tree: SuperTree, mapper: ClassT => ClassT)(visitor: ClassVisitor => ClassVisitor): Unit = {
     val ls = LensFamily.firstLensFamily[Path, Option[Array[Byte]], Path]
-    inFs.toList.fpair map 
-      (ls =>= classFilter map { p => transformClass(p)(tree)(visitor) }) >>> fsClassWrite(mapper, outFs)
+    Walk(inPath).toList.fpair map 
+      (ls =>= classFilter.map { p => transformClass(p)(tree)(visitor) }) >>>
+      fsClassWrite(mapper, inPath, outPath)
   }
 
   val toSuperMaps = (n: ClassNode) => (

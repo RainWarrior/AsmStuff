@@ -19,24 +19,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package stackmap
 
-import asmstuff._
-import Util._
+import java.nio.file.Path
 
 import scalaz._
 import Scalaz._
 
+import asmstuff._
+import Util._
+
 object Main {
   def main(args: Array[String]) {
 
-    val inZip = openZip("1.6.4_mcp.jar")
-    val outZip = openZip("1.6.4_mcp2.jar", true)
+    val inRoot: Path = openZip("1.6.4_mcp.jar").getPath("/")
+    val outRoot: Path = openZip("1.6.4_mcp2.jar", true).getPath("/")
 
-    //val inFiles = inZip.unit[List[Path]]
-    val inFiles = inZip.toList
+    val prov = MapSuperTree(genSuperMaps[WalkUniv](Walk(inRoot)))
 
-    val prov = MapSuperTree(genSuperMaps(inFiles))
-
-    transformClasses(inZip, outZip, prov, c => c)(v => v)
+    transformClasses(inRoot, outRoot, prov, c => c)(v => v)
 
     //transformClasses((new ASMifier, new PrintWriter(System.out)))(inZip, outZip)
   }

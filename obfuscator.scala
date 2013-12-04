@@ -113,7 +113,7 @@ object TreeObfuscator {
       def open(p: Path): Vector[Path] = {
         val fs = openZip(p)
         toClose = fs :: toClose
-        fs.to[Vector]
+        fs.getPath("/").to[Vector]
       }
 
       val fromTree1 = MapMethodTree(
@@ -195,7 +195,7 @@ object TreeObfuscator {
       for((i, o) <- forwConverts) {
         val iz = openZip(i)
         val oz = openZip(o, true)
-        transformClasses(iz, oz, toTree, forwMapper.map)(forwMapper)
+        transformClasses(iz.getPath("/"), oz.getPath("/"), toTree, forwMapper.map)(forwMapper)
         iz.close()
         oz.close()
       }
@@ -205,7 +205,7 @@ object TreeObfuscator {
       for((i, o) <- backConverts) {
         val iz = openZip(i)
         val oz = openZip(o, true)
-        transformClasses(iz, oz, fromTree, backMapper.map)(backMapper)
+        transformClasses(iz.getPath("/"), oz.getPath("/"), fromTree, backMapper.map)(backMapper)
         iz.close()
         oz.close()
       }
