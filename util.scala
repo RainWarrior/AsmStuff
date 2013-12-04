@@ -176,18 +176,14 @@ trait IsClassProviderUtil {
     r.accept(v, ClassReader.EXPAND_FRAMES)
   }
 
-  implicit val pathProvider = IsClassProvider[Path] { p => v =>
-    val s = Files.newInputStream(p)
-    new ClassReader(s).accept(v, ClassReader.EXPAND_FRAMES)
-    s.close()
-  }
-
   implicit val nodeProvider = IsClassProvider[ClassNode] { n => v =>
     n.accept(v)
   }
 
-  def runProvider[P, V <: ClassVisitor](p: P, v: V)(implicit P: IsClassProvider[P]): V =
-    runProvider(p, v, v => v)(P)
+  def runProvider[P, V <: ClassVisitor](p: P, v: V)(implicit P: IsClassProvider[P]): V = {
+    P.accept(p)(v)
+    v
+  }
 
   def runProvider[P, V <: ClassVisitor](p: P, v: V, f: ClassVisitor => ClassVisitor)(implicit P: IsClassProvider[P]): V = {
     P.accept(p)(f(v))
@@ -196,6 +192,13 @@ trait IsClassProviderUtil {
 }
 
 object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunctions {
+
+  implicit def readClass(p: Path): ClassReader = {
+    val s = Files.newInputStream(p)
+    val cr = new ClassReader(s)
+    s.close()
+    cr
+  }
 
   implicit def rvToFunction(r: Remapper) = (v: ClassVisitor) => new RemappingClassAdapter(v, r) // CV => CV
   implicit def printerToFunction(t: (Printer, PrintWriter)) = (v: ClassVisitor) => new TraceClassVisitor(v, t._1, t._2) // CV => CV
@@ -239,26 +242,39 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
           case nps => nps
         }
         val nPath = out resolve nps
-        Files.createDirectories(nPath.getParent)
-        val os = Files.newOutputStream(nPath, SOO.CREATE, SOO.TRUNCATE_EXISTING, SOO.WRITE)
-        os.write(d)
-        os.close()
-      case None => 
+        writeBytes(d, nPath)
+      case None =>
         val nPath = out resolve (in relativize path)
-        Files.createDirectories(nPath.getParent)
-        Files.copy(path, nPath, SCO.REPLACE_EXISTING)
+        copyFile(path, nPath)
     }
   }
 
-  def transformClass(p: Path)(tree: SuperTree)(f: ClassVisitor => ClassVisitor): Array[Byte] =
-    runProvider(p, TreeWriter(tree), f).toByteArray
+  def copyFile(path: Path, nPath: Path): Unit = {
+    Files.createDirectories(nPath.getParent)
+    Files.copy(path, nPath, SCO.REPLACE_EXISTING)
+  }
+
+  def writeBytes(bytes: Array[Byte], nPath: Path): Unit = {
+    Files.createDirectories(nPath.getParent)
+    val os = Files.newOutputStream(nPath, SOO.CREATE, SOO.TRUNCATE_EXISTING, SOO.WRITE)
+    os.write(bytes)
+    os.close()
+  }
+
+  def transformClass[P: IsClassProvider](p: P)(writer: ClassWriter = null)(f: ClassVisitor => ClassVisitor): Array[Byte] = {
+    val w = Option(writer) getOrElse (p match {
+      case cr: ClassReader => new ClassWriter(cr, ClassWriter.COMPUTE_MAXS)
+      case _ => new ClassWriter(ClassWriter.COMPUTE_MAXS)
+    })
+    runProvider(p, w, f).toByteArray
+  }
 
   val classFilter = Kleisli[Option, Path, Path](p => if(p.toString.endsWith(".class")) Some(p) else None)
 
   def transformClasses(inPath: Path, outPath: Path, tree: SuperTree, mapper: ClassT => ClassT)(visitor: ClassVisitor => ClassVisitor): Unit = {
     val ls = LensFamily.firstLensFamily[Path, Option[Array[Byte]], Path]
     Walk(inPath).toList.fpair map 
-      (ls =>= classFilter.map { p => transformClass(p)(tree)(visitor) }) >>>
+      (ls =>= classFilter.map { p => transformClass(readClass(p))(TreeWriter(tree))(visitor) }) >>>
       fsClassWrite(mapper, inPath, outPath)
   }
 
@@ -276,7 +292,7 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
   //(Map[String, String @@ Tags.FirstVal], Map[String, Set[String]])
   def foldFiles[F[_]: Foldable, R: Monoid](proc: ClassNode => R)(files: F[Path]): R =
     //(files filter classFilter.isDefinedAt map (readClass >>> nodeClass >>> proc)).fold
-    files foldMap classFilter.map(p => proc(runProvider(p, new ClassNode))).run.andThen(_.orZero)
+    files foldMap classFilter.map(p => proc(runProvider(readClass(p), new ClassNode))).run.andThen(_.orZero)
 
   def genSuperMaps[F[_]: Foldable](files: F[Path]) = foldFiles(toSuperMaps)(files)
 
