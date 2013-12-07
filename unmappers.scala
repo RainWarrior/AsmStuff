@@ -33,7 +33,7 @@ trait Unmapper extends Remapper {
   def mapClass(tpe: ClassT): Option[String]
 
   override def mapFieldName(tpe: String, name: String, desc: String): String = 
-    mapField(tpe, name, desc).getOrElse(name)
+    mapField(tpe, name, "").getOrElse(name) // no field types in SRG, workaround
   override def mapMethodName(tpe: String, name: String, desc: String): String =
     mapMethod(
       tpe,
@@ -70,6 +70,8 @@ trait MethodPropagatingUnmapper extends Unmapper {
 trait SimpleUnmapper extends Unmapper {
   @inline private def t(s: String): Type = Type.getType(s)
 
+  val stree: SuperTree
+
   var mappedFields = Map.empty[FieldU, FieldName]
   var mappedMethods = Map.empty[MethodU, MethodName]
   var mappedClasses = Map.empty[ClassT, ClassT]
@@ -78,9 +80,19 @@ trait SimpleUnmapper extends Unmapper {
     addClass((s, s))*/
 
   override def mapField(tpe: String, name: String, desc: String): Option[String] =
-    mappedFields.get(FieldU(tpe, name, desc))
+    mappedFields.get(FieldU(tpe, name, desc)) orElse {
+      stree.getIfaces(tpe).flatMap(i => mapField(i, name, desc)).headOption
+    } orElse {
+      stree.getSuper(tpe).flatMap(s => mapField(s, name, desc))
+    }
+    //mappedFields.get(FieldU(tpe, name, desc))
   override def mapMethod(tpe: String, name: String, ret: String, args: Seq[String]): Option[String] =
-    mappedMethods.get(MethodU(tpe, name, ret, args))
+    // Not entirely correct, but should suffice
+    mappedMethods.get(MethodU(tpe, name, ret, args)) orElse {
+      stree.getSuper(tpe).flatMap(s => mapMethod(s, name, ret, args))
+    } orElse {
+      stree.getIfaces(tpe).flatMap(i => mapMethod(i, name, ret, args)).headOption
+    }
   override def mapClass(tpe: String): Option[String] =
     mappedClasses.get(tpe).orElse(if(Type.getType(tpe).getSort != Type.OBJECT) Some(tpe) else None)
 
@@ -119,5 +131,6 @@ trait SimpleUnmapper extends Unmapper {
 trait UnmapperFunctions {
   def MethodPropagatingUnmapper(t: MethodTree) = new SimpleUnmapper with MethodPropagatingUnmapper {
     val tree = t
+    val stree = t
   }
 }

@@ -31,7 +31,6 @@ import scalaz._
 import Scalaz._
 
 import Util._
-import Util.mapMethodMonoid
 
 object TreeObfuscator {
 
@@ -113,7 +112,7 @@ object TreeObfuscator {
       def open(p: Path): Vector[Path] = {
         val fs = openZip(p)
         toClose = fs :: toClose
-        fs.getPath("/").to[Vector]
+        Walk(fs.getPath("/")).to[Vector]
       }
 
       val fromTree1 = MapMethodTree(
