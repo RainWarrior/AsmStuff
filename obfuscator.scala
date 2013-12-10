@@ -39,6 +39,10 @@ object TreeObfuscator {
     toClasses: Vector[Path] = Vector.empty,
     forwConverts: Vector[(Path, Path)] = Vector.empty,
     backConverts: Vector[(Path, Path)] = Vector.empty,
+    forwConvertSrgsFrom: Vector[(Path, Path)] = Vector.empty,
+    backConvertSrgsFrom: Vector[(Path, Path)] = Vector.empty,
+    forwConvertSrgsTo: Vector[(Path, Path)] = Vector.empty,
+    backConvertSrgsTo: Vector[(Path, Path)] = Vector.empty,
     forwSrgs: Vector[Path] = Vector.empty,
     backSrgs: Vector[Path] = Vector.empty,
     saveSrg: Option[Path] = None,
@@ -74,7 +78,19 @@ object TreeObfuscator {
       c.copy(forwConverts = c.forwConverts :+ x)
     }
     filePairOpt("reverse-convert") abbr "rc" text "convert specified classes using reverse mappings" action { (x, c) =>
-      c.copy(forwConverts = c.forwConverts :+ x)
+      c.copy(backConverts = c.backConverts :+ x)
+    }
+    filePairOpt("convert-srg-from") abbr "csf" text "convert specified srg's from part using all provided mappings" action { (x, c) =>
+      c.copy(forwConvertSrgsFrom = c.forwConvertSrgsFrom :+ x)
+    }
+    filePairOpt("reverse-convert-srg-from") abbr "rcsf" text "convert specified srg's from part using reverse mappings" action { (x, c) =>
+      c.copy(backConvertSrgsFrom = c.backConvertSrgsFrom :+ x)
+    }
+    filePairOpt("convert-srg-to") abbr "csf" text "convert specified srg's to part using all provided mappings" action { (x, c) =>
+      c.copy(forwConvertSrgsTo = c.forwConvertSrgsTo :+ x)
+    }
+    filePairOpt("reverse-convert-srg-to") abbr "rcsf" text "convert specified srg's to part using reverse mappings" action { (x, c) =>
+      c.copy(backConvertSrgsTo = c.backConvertSrgsTo :+ x)
     }
     fileOpt("save-srg") abbr "ss" text "save resulting srg file" action { (x, c) =>
       c.copy(saveSrg = Some(x))
@@ -210,6 +226,47 @@ object TreeObfuscator {
       }
 
       println("converted backwards")
+
+      for((i, o) <- forwConvertSrgsFrom) {
+        Files.write(
+          o,
+          Srg.transformFrom(forwMapper)(Files.readAllLines(i, Charset.defaultCharset).to[Vector]),
+          Charset.defaultCharset
+        )
+      }
+
+      println("converted srgs froms forwards")
+
+      for((i, o) <- forwConvertSrgsTo) {
+        Files.write(
+          o,
+          Srg.transformTo(forwMapper)(Files.readAllLines(i, Charset.defaultCharset).to[Vector]),
+          Charset.defaultCharset
+        )
+      }
+
+      println("converted srgs tos forwards")
+
+      for((i, o) <- backConvertSrgsFrom) {
+        Files.write(
+          o,
+          Srg.transformFrom(backMapper)(Files.readAllLines(i, Charset.defaultCharset).to[Vector]),
+          Charset.defaultCharset
+        )
+      }
+
+      println("converted srgs froms backwards")
+
+      for((i, o) <- backConvertSrgsTo) {
+        Files.write(
+          o,
+          Srg.transformTo(backMapper)(Files.readAllLines(i, Charset.defaultCharset).to[Vector]),
+          Charset.defaultCharset
+        )
+      }
+
+      println("converted srgs froms backwards")
+
     }
 
     /*

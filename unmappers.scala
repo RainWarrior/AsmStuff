@@ -94,7 +94,7 @@ trait SimpleUnmapper extends Unmapper {
       stree.getIfaces(tpe).flatMap(i => mapMethod(i, name, ret, args)).headOption
     }
   override def mapClass(tpe: String): Option[String] =
-    mappedClasses.get(tpe).orElse(if(Type.getType(tpe).getSort != Type.OBJECT) Some(tpe) else None)
+    mappedClasses.get(tpe)//.orElse(if(Type.getType(tpe).getSort != Type.OBJECT) Some(tpe) else None) // FIXME
 
   override def addField(pair: (FieldU, FieldName)) = mappedFields.get(pair._1) match {
     case Some(t) => if(t != pair._2)

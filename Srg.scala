@@ -34,9 +34,13 @@ import Types._
 
 object Srg {
   object Descriptor {
-    def unapply(s: String): Option[(Seq[String], String)] = {
+    def apply(ret: String, args: Seq[String]) = {
+      Type.getMethodType(Type.getType(ret), args.map(Type.getType): _*).getDescriptor
+    }
+
+    def unapply(s: String): Option[(String, Seq[String])] = {
       try {
-        Some((Type.getArgumentTypes(s).map(_.getDescriptor), Type.getReturnType(s).getDescriptor))
+        Some((Type.getReturnType(s).getDescriptor, Type.getArgumentTypes(s).map(_.getDescriptor)))
       } catch {
         case e: Exception => None
       }
@@ -57,15 +61,15 @@ object Srg {
 
   def load[F[_]: Functor](lines: F[String], um: Unmapper): Unit = {
     for(l <- lines) yield l match {
-      case Line("PK", Str2(oldpkg, newpkg), comment) =>
+      case Line("PK", Str2(oldpkg, newpkg), comment) => // TODO
       case Line("CL", Str2(oldCl, newCl), comment) =>
         um.addClass(oldCl -> newCl)
       case Line("FD", Str2(Pkg(oldCl, oldFd), Pkg(newCl, newFd)), comment) =>
         um.addClass(oldCl -> newCl)
         um.addField(FieldU(oldCl, oldFd, "") -> newFd) // No field type in srg
       case Line("MD", Str4(
-          Pkg(oldCl, oldMd), Descriptor(oldArgs, oldRt), 
-          Pkg(newCl, newMd), Descriptor(newArgs, newRt)), comment)
+          Pkg(oldCl, oldMd), Descriptor(oldRt, oldArgs),
+          Pkg(newCl, newMd), Descriptor(newRt, newArgs)), comment)
           if oldArgs.length == newArgs.length =>
         um.addClass(oldCl -> newCl)
         for {
@@ -92,5 +96,40 @@ object Srg {
   }
 
   def reverse[F[_]: Functor](lines: F[String]): F[String] = lines map revLine
+
+  def transformLineFrom(um: Unmapper)(line: String): String = line match {
+      case Line("PK", Str2(oldpkg, newpkg), comment) => // TODO
+        line
+      case Line("CL", Str2(oldCl, newCl), comment) =>
+        s"CL: ${um.map(oldCl)} $newCl ${Option(comment).orZero}"
+      case Line("FD", Str2(Pkg(oldCl, oldFd), Pkg(newCl, newFd)), comment) =>
+        s"FD: ${um.map(oldCl)}/${um.mapFieldName(oldCl, oldFd, "")} $newCl/$newFd ${Option(comment).orZero}"
+      case Line("MD", Str4(
+          Pkg(oldCl, oldMd), Descriptor(oldRt, oldArgs),
+          Pkg(newCl, newMd), Descriptor(newRt, newArgs)), comment) =>
+        val oldDesc = Descriptor(oldRt, oldArgs)
+        val newDesc = Descriptor(newRt, newArgs)
+        s"MD: ${um.map(oldCl)}/${um.mapMethodName(oldCl, oldMd, oldDesc)} ${um.mapMethodDesc(oldDesc)} $newCl/$newMd $newDesc ${Option(comment).orZero}"
+    case _ => throw new IllegalArgumentException(s"""Wrong line in SRG file: "$line" """)
+  }
+
+  def transformLineTo(um: Unmapper)(line: String): String = line match {
+      case Line("PK", Str2(oldpkg, newpkg), comment) => // TODO
+        line
+      case Line("CL", Str2(oldCl, newCl), comment) =>
+        s"CL: $oldCl ${um.map(newCl)} ${Option(comment).orZero}"
+      case Line("FD", Str2(Pkg(oldCl, oldFd), Pkg(newCl, newFd)), comment) =>
+        s"FD: $oldCl/$oldFd ${um.map(newCl)}/${um.mapFieldName(newCl, newFd, "")} ${Option(comment).orZero}"
+      case Line("MD", Str4(
+          Pkg(oldCl, oldMd), Descriptor(oldRt, oldArgs),
+          Pkg(newCl, newMd), Descriptor(newRt, newArgs)), comment) =>
+        val oldDesc = Descriptor(oldRt, oldArgs)
+        val newDesc = Descriptor(newRt, newArgs)
+        s"MD: $oldCl/$oldMd $oldDesc ${um.map(newCl)}/${um.mapMethodName(newCl, newMd, newDesc)} ${um.mapMethodDesc(newDesc)} ${Option(comment).orZero}"
+    case _ => throw new IllegalArgumentException(s"""Wrong line in SRG file: "$line" """)
+  }
+
+  def transformFrom[F[_]: Functor](um: Unmapper)(lines: F[String]): F[String] = lines map transformLineFrom(um)
+  def transformTo[F[_]: Functor](um: Unmapper)(lines: F[String]): F[String] = lines map transformLineTo(um)
 }
 
