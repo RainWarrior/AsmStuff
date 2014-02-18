@@ -217,7 +217,20 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
 
   type WalkUniv[Path] = Walk
 
-  implicit val walkFoldable: Foldable[WalkUniv] = new Foldable.FromFoldMap[WalkUniv] {
+  implicit val walkFoldable: Foldable[WalkUniv] = new Foldable.FromFoldr[WalkUniv] {
+    def foldRight[A, B](pa: WalkUniv[A], z: => B)(f: (A, => B) => B) = {
+      var res: B = z
+      Files.walkFileTree(pa.root, new SimpleFileVisitor[Path] {
+        override def visitFile(path: Path, attrs: BasicFileAttributes) = {
+          res = f(path.asInstanceOf[A], res)
+          FileVisitResult.CONTINUE
+        }
+      })
+      res
+    }
+  }
+
+  /*implicit val walkFoldable: Foldable[WalkUniv] = new Foldable.FromFoldMap[WalkUniv] {
     def foldMap[A, B](pa: WalkUniv[A])(f: A => B)(implicit F: Monoid[B]) = {
       var res: B = F.zero
       Files.walkFileTree(pa.root, new SimpleFileVisitor[Path] {
@@ -228,7 +241,7 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
       })
       res
     }
-  }
+  }*/
 
   val cr = """(.*)\.class""".r
   def fsClassWrite(mapper: ClassT => ClassT, in: Path, out: Path) = {(t: (Option[Array[Byte]], Path)) =>
