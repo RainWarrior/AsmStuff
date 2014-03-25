@@ -116,7 +116,7 @@ object TreeObfuscator {
       }
 
       val forwLines = forwSrgs flatMap (p => Files.readAllLines(p, Charset.defaultCharset).to[Vector])
-      val backLines = backSrgs flatMap (p => Files.readAllLines(p, Charset.defaultCharset).to[Vector].map(Srg.revLine))
+      val backLines = backSrgs flatMap (p => Files.readAllLines(p, Charset.defaultCharset).to[Vector])
 
       val forwSrg = forwLines ++ (backLines map Srg.revLine)
       val backSrg = (forwLines map Srg.revLine) ++ backLines
