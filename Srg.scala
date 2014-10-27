@@ -33,22 +33,8 @@ import Scalaz._
 import Types._
 
 object Srg {
-  object Descriptor {
-    def apply(ret: String, args: Seq[String]) = {
-      Type.getMethodType(Type.getType(ret), args.map(Type.getType): _*).getDescriptor
-    }
-
-    def unapply(s: String): Option[(String, Seq[String])] = {
-      try {
-        Some((Type.getReturnType(s).getDescriptor, Type.getArgumentTypes(s).map(_.getDescriptor)))
-      } catch {
-        case e: Exception => None
-      }
-    }
-  }
-
-  def spaceR(n: Int) = Seq.fill(n)("([^ #]*)").mkString(" ").+(" ?").r
-  val Line = """^(..): ((?:[^ #]* ?)*)(#.*)?$""".r
+  def spaceR(n: Int) = Seq.fill(n)("([^ #]*)").mkString(" +").+(" ?").r
+  val Line = """^(..): ((?:[^ #]* +)*)(#.*)?$""".r
   val Str2 = spaceR(2)
   val Str4 = spaceR(4)
   val Pkg = """(.*)/([^/]*)""".r
@@ -84,9 +70,12 @@ object Srg {
         um.addMethod(MethodU(oldCl, oldMd, oldRt, oldArgs) -> newMd)
         //if(oldCl == "fz") println(s"Method: $oldCl/$oldMd:${oldArgs.mkString} -> $newMd")
         //println(s"Method: $oldCl/$oldMd:${oldArgs.mkString} -> $newMd")
+      case "" => // ingore empty lines
       case _ => throw new IllegalArgumentException(s"""Wrong line in SRG file: "$l" """)
     }
   }
+
+  def reverse[F[_]: Functor](lines: F[String]): F[String] = lines map revLine
 
   def revLine(line: String) = line match {
       case Line(tp, Str2(a, b), comment) =>
@@ -94,8 +83,6 @@ object Srg {
       case Line(tp, Str4(a1, a2, b1, b2), comment) =>
         s"$tp: $b1 $b2 $a1 $a2 ${Option(comment).orZero}"
   }
-
-  def reverse[F[_]: Functor](lines: F[String]): F[String] = lines map revLine
 
   def transformLineFrom(um: Unmapper)(line: String): String = line match {
       case Line("PK", Str2(oldpkg, newpkg), comment) => // TODO

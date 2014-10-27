@@ -159,6 +159,20 @@ object Types {
       case _ => None
     }
   }
+
+  object Descriptor {
+    def apply(ret: String, args: Seq[String]) = {
+      Type.getMethodType(Type.getType(ret), args.map(Type.getType): _*).getDescriptor
+    }
+
+    def unapply(s: String): Option[(String, Seq[String])] = {
+      try {
+        Some((Type.getReturnType(s).getDescriptor, Type.getArgumentTypes(s).map(_.getDescriptor)))
+      } catch {
+        case e: Exception => None
+      }
+    }
+  }
 }
 
 import Types._

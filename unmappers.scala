@@ -22,6 +22,11 @@ package asmstuff
 import org.objectweb.asm.{ commons, Type }
 import commons.Remapper
 
+import scalaz._
+import Scalaz._
+
+import scala.math.Ordering
+
 import Types._
 
 trait Unmapper extends Remapper {
@@ -29,8 +34,8 @@ trait Unmapper extends Remapper {
   def addMethod(pair: (MethodU, MethodName)): Unit
   def addClass(pair: (ClassT, ClassT)): Unit
   def mapField(tpe: ClassT, name: FieldName, desc: FieldDesc): Option[FieldName]
-  def mapMethod(tpe: ClassT, name: FieldName, ret: ClassT, args: Seq[ClassT]): Option[MethodName]
-  def mapClass(tpe: ClassT): Option[String]
+  def mapMethod(tpe: ClassT, name: MethodName, ret: FieldDesc, args: Seq[FieldDesc]): Option[MethodName]
+  def mapClass(tpe: ClassT): Option[ClassT]
 
   override def mapFieldName(tpe: String, name: String, desc: String): String = 
     mapField(tpe, name, "").getOrElse(name) // no field types in SRG, workaround
@@ -43,6 +48,16 @@ trait Unmapper extends Remapper {
     ).getOrElse(name)
   override def map(tpe: String): String =
     mapClass(tpe).getOrElse(tpe)
+
+  def mapFieldDesc(desc: FieldDesc): Option[FieldDesc] = {
+    val t = Type.getType(desc)
+    t.getSort match {
+      case Type.ARRAY =>
+        mapFieldDesc(t.getElementType.getDescriptor) map ("[" * t.getDimensions + _)
+      case Type.OBJECT =>
+        mapClass(t.getInternalName) map (n => Type.getObjectType(n).getDescriptor)
+    }
+  }
 }
 
 trait MethodPropagatingUnmapper extends Unmapper {
@@ -79,21 +94,21 @@ trait SimpleUnmapper extends Unmapper {
   /*for (s <- List("D"))
     addClass((s, s))*/
 
-  override def mapField(tpe: String, name: String, desc: String): Option[String] =
+  override def mapField(tpe: ClassT, name: FieldName, desc: FieldDesc): Option[String] =
     mappedFields.get(FieldU(tpe, name, desc)) orElse {
       stree.getIfaces(tpe).flatMap(i => mapField(i, name, desc)).headOption
     } orElse {
       stree.getSuper(tpe).flatMap(s => mapField(s, name, desc))
     }
     //mappedFields.get(FieldU(tpe, name, desc))
-  override def mapMethod(tpe: String, name: String, ret: String, args: Seq[String]): Option[String] =
+  override def mapMethod(tpe: ClassT, name: MethodName, ret: FieldDesc, args: Seq[FieldDesc]): Option[String] =
     // Not entirely correct, but should suffice
     mappedMethods.get(MethodU(tpe, name, ret, args)) orElse {
       stree.getSuper(tpe).flatMap(s => mapMethod(s, name, ret, args))
     } orElse {
       stree.getIfaces(tpe).flatMap(i => mapMethod(i, name, ret, args)).headOption
     }
-  override def mapClass(tpe: String): Option[String] =
+  override def mapClass(tpe: ClassT): Option[ClassT] =
     mappedClasses.get(tpe)//.orElse(if(Type.getType(tpe).getSort != Type.OBJECT) Some(tpe) else None) // FIXME
 
   override def addField(pair: (FieldU, FieldName)) = mappedFields.get(pair._1) match {
@@ -128,9 +143,42 @@ trait SimpleUnmapper extends Unmapper {
   }
 }
 
+trait ChainUnmapper extends Unmapper {
+  val first: Unmapper
+  val second: Unmapper
+
+  def addField(pair: (FieldU, FieldName)): Unit = ???
+  def addMethod(pair: (MethodU, MethodName)): Unit = ???
+  def addClass(pair: (ClassT, ClassT)): Unit = ???
+
+  def mapField(tpe: ClassT, name: FieldName, desc: FieldDesc): Option[FieldName] = for {
+    tpe1 <- first.mapClass(tpe)
+    name1 <- first.mapField(tpe, name, desc)
+    desc1 <- first.mapFieldDesc(desc)
+    name2 <- second.mapField(tpe1, name1, desc1)
+  } yield name2
+
+  def mapMethod(tpe: ClassT, name: MethodName, ret: FieldDesc, args: Seq[FieldDesc]): Option[MethodName] = for {
+    tpe1 <- first.mapClass(tpe)
+    name1 <- first.mapMethod(tpe, name, ret, args)
+    ret1 <- first.mapFieldDesc(ret)
+    args1 <- args.to[Vector].traverse(first.mapFieldDesc)
+    name2 <- second.mapMethod(tpe1, name1, ret1, args1)
+  } yield name2
+
+  def mapClass(tpe: ClassT): Option[ClassT] = for {
+    tpe1 <- first.mapClass(tpe)
+    tpe2 <- second.mapClass(tpe1)
+  } yield tpe2
+}
+
 trait UnmapperFunctions {
   def MethodPropagatingUnmapper(t: MethodTree) = new SimpleUnmapper with MethodPropagatingUnmapper {
     val tree = t
     val stree = t
+  }
+  def ChainUnmapper(f: Unmapper, s: Unmapper) = new ChainUnmapper {
+    val first = f
+    val second = s
   }
 }
