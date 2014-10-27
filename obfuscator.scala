@@ -30,6 +30,8 @@ import collection.JavaConversions._
 import scalaz._
 import Scalaz._
 
+import asmstuff.mixin.Mixer
+
 import Util._
 
 object TreeObfuscator {
@@ -47,7 +49,8 @@ object TreeObfuscator {
     backSrgs: Vector[Path] = Vector.empty,
     saveSrg: Option[Path] = None,
     saveRSrg: Option[Path] = None,
-    recheck: Boolean = false
+    recheck: Boolean = false,
+    mixin: Boolean = false
   )
 
   implicit val pathRead: Read[Path] = Read.reads { Paths.get(_) }
@@ -100,6 +103,9 @@ object TreeObfuscator {
     }
     opt[Unit]("recheck") abbr "r" text "enable additional mapping checks" action { (_, c) =>
       c.copy(recheck = true)
+    }
+    opt[Unit]("mixin") abbr "m" text "apply mixin transformer in addition to everything else" action { (_, c) =>
+      c.copy(mixin = true)
     }
     // TODO load/save tree
   }
@@ -210,7 +216,11 @@ object TreeObfuscator {
       for((i, o) <- forwConverts) {
         val iz = openZip(i)
         val oz = openZip(o, true)
-        transformClasses(iz.getPath("/"), oz.getPath("/"), toTree, forwMapper.map)(forwMapper)
+        transformClasses(iz.getPath("/"), oz.getPath("/"), toTree, forwMapper.map) { cv =>
+          if(mixin) {
+            new Mixer(forwMapper(cv), fromTree)
+          } else forwMapper(cv)
+        }
         iz.close()
         oz.close()
       }
@@ -220,7 +230,11 @@ object TreeObfuscator {
       for((i, o) <- backConverts) {
         val iz = openZip(i)
         val oz = openZip(o, true)
-        transformClasses(iz.getPath("/"), oz.getPath("/"), fromTree, backMapper.map)(backMapper)
+        transformClasses(iz.getPath("/"), oz.getPath("/"), fromTree, backMapper.map) { cv =>
+          if(mixin) {
+            new Mixer(backMapper(cv), toTree)
+          } else backMapper(cv)
+        }
         iz.close()
         oz.close()
       }
