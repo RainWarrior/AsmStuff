@@ -332,7 +332,7 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
     openZip(Paths.get(pathString), create)
 
   def openZip(path: Path, create: Boolean = false): FileSystem = {
-    val uri = URI.create("jar:file:" + path.toUri.getPath)
+    val uri = URI.create("jar:" + path.toUri)
     FileSystems.newFileSystem(uri, Map("create" -> create.toString))
   }
 }
