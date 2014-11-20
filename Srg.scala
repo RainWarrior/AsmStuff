@@ -33,8 +33,8 @@ import Scalaz._
 import Types._
 
 object Srg {
-  def spaceR(n: Int) = Seq.fill(n)("([^ #]*)").mkString(" +").+(" ?").r
-  val Line = """^(..): ((?:[^ #]* +)*)(#.*)?$""".r
+  def spaceR(n: Int) = Seq.fill(n)("([^ #]+)").mkString(" +").+(" *").r
+  val Line = """^(..): ((?:[^ #]+ +)*[^ #]+ *)(#.*)?$""".r
   val Str2 = spaceR(2)
   val Str4 = spaceR(4)
   val Pkg = """(.*)/([^/]*)""".r
