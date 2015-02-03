@@ -104,9 +104,9 @@ object TreeObfuscator {
     opt[Unit]("recheck") abbr "r" text "enable additional mapping checks" action { (_, c) =>
       c.copy(recheck = true)
     }
-    opt[Unit]("mixin") abbr "m" text "apply mixin transformer in addition to everything else" action { (_, c) =>
+    /*opt[Unit]("mixin") abbr "m" text "apply mixin transformer in addition to everything else" action { (_, c) =>
       c.copy(mixin = true)
-    }
+    }*/
     // TODO load/save tree
   }
 
