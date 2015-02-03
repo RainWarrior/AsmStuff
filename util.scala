@@ -81,7 +81,7 @@ object Types {
       name == sm.name &&
       desc == sm.desc &&
       (sm isInheritedBy owner) && {
-        if(this.static && !sm.static) println("Static hiding non-static: $this, $sm")
+        if(this.static && !sm.static) println(s"Static hiding non-static: $this, $sm")
         true
       }
     }
@@ -229,7 +229,7 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
     def leibniz = Leibniz.refl
   }
 
-  type WalkUniv[Path] = Walk
+  type WalkUniv[_] = Walk
 
   implicit val walkFoldable: Foldable[WalkUniv] = new Foldable.FromFoldr[WalkUniv] {
     def foldRight[A, B](pa: WalkUniv[A], z: => B)(f: (A, => B) => B) = {
@@ -321,9 +321,15 @@ object Util extends IsClassProviderUtil with TreeInstances with UnmapperFunction
     //(files filter classFilter.isDefinedAt map (readClass >>> nodeClass >>> proc)).fold
     files foldMap classFilter.map(p => proc(runProvider(readClass(p), new ClassNode))).run.andThen(_.orZero)
 
-  def genSuperMaps[F[_]: Foldable](files: F[Path]) = foldFiles(toSuperMaps)(files)
+  def genSuperMaps[F[_]: Foldable](files: F[Path]) = {
+    val (sMap, iMap) = foldFiles(toSuperMaps)(files)
+    (sMap.mapValues(Tag.unwrap), iMap)
+  }
 
-  def genMethodMaps[F[_]: Foldable](files: F[Path]) = foldFiles(toMethodMaps)(files)
+  def genMethodMaps[F[_]: Foldable](files: F[Path]) = {
+    val (sMap, iMap, mMap) = foldFiles(toMethodMaps)(files)
+    (sMap.mapValues(Tag.unwrap), iMap, mMap)
+  }
 
   def openZip(pathString: String): FileSystem =
     openZip(Paths.get(pathString))
